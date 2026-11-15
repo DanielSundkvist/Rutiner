@@ -1,0 +1,17 @@
+Rutiner som webapp
+
+Bildstöd för barnens morgon, dag och kväll. Mappen innehåller allt som behövs.
+Den måste ligga på en webbadress som börjar med https för att kunna installeras på telefonen.
+
+1. Lägg upp hela mappen hos en webbtjänst för statiska sidor, till exempel
+   GitHub Pages, Netlify eller Cloudflare Pages. Alla filer ska ligga i samma mapp.
+2. Öppna adressen på telefonen.
+   iPhone: öppna i Safari, tryck på Dela och välj "Lägg till på hemskärmen".
+   Android: öppna i Chrome, tryck på menyn och välj "Installera app" eller "Lägg till på startskärmen".
+3. Starta appen från ikonen. Efter första besöket fungerar den även utan nät.
+
+Appen hämtar senaste versionen från nätet varje gång den öppnas.
+Utan nät används den version som sparades senast.
+
+Inställningarna sparas på varje telefon. Under kugghjulet (tryck 42) finns en kod
+som flyttar en familjs inställningar till en annan telefon.
