@@ -199,7 +199,7 @@ a.sm{display:inline-block;text-decoration:none;color:var(--ink);text-align:cente
 .part.hug.compact .hugtx{gap:2px}
 .part.hug.compact .ph.lg{width:48px;height:48px;font-size:32px}
 .part.hug.compact p{font-size:15px}
-body.school main{padding-bottom:60px}
+body.school main{padding-bottom:92px}
 .part.hug.compact h3{font-size:22px}
 .part.hug small.lbl{color:var(--ink-soft)}
 
@@ -232,6 +232,25 @@ details.sec>summary{padding:14px 12px;font-family:var(--display);font-weight:800
 details.sec .secb{display:flex;flex-direction:column;gap:10px;padding:0 12px 14px}
 details.sec details.pt{background:var(--sky)}
 details.sec details.pt .row{background:var(--card)}
+.sched{display:flex;flex-direction:column;gap:8px}
+.phead{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:4px}
+.phead>b{font-family:var(--display);font-weight:800;font-size:20px}
+.phead .adultrow{font-size:15px}
+.phead .ph{width:34px;height:34px;font-size:20px}
+.chk-row{display:grid;grid-template-columns:52px 48px 1fr auto;align-items:center;gap:10px;background:var(--card);border:2px solid var(--line);border-radius:20px;padding:8px 12px;min-height:68px;cursor:pointer}
+.chk-row .ic{font-size:38px;line-height:1;text-align:center}
+.chk-row .ph{width:46px;height:46px;font-size:34px}
+.chk-row .tx{display:flex;flex-direction:column;min-width:0}
+.chk-row b{font-family:var(--display);font-weight:800;font-size:24px;line-height:1.1}
+.chk-row small{font-weight:700;color:var(--ink-soft);font-size:15px}
+.chk-row .tag{border:2px solid var(--accent);border-radius:999px;padding:2px 10px;color:var(--ink);font-weight:800}
+.chk-row.next{border:4px solid var(--accent);box-shadow:0 8px 24px rgba(88,60,150,.13)}
+.chk-row.done{opacity:.72;background:var(--sky)}
+.chk-row.pickup{background:#FFF1C9;border-color:var(--sun)}
+.chk-row.pickup.next{border-color:var(--accent)}
+.bigbox{appearance:none;-webkit-appearance:none;margin:0;width:48px;height:48px;border:3px solid var(--ink);border-radius:12px;background:#fff;display:grid;place-items:center;cursor:pointer}
+.bigbox:checked{background:#DFF5EC}
+.bigbox:checked::after{content:"✔";font-size:32px;line-height:1;color:var(--ink)}
 .peekbar{display:block;text-align:center;font-weight:700;font-size:15px;color:var(--ink);background:#FFF4F6;border:2px solid #B3243F;border-radius:12px;padding:6px 10px;text-decoration:none}
 .peekbar b{text-decoration:underline}
 .todo{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
@@ -339,7 +358,7 @@ function defKid(theme){
     treat:d?"Vi leker med bilarna tillsammans":"Vi läser en saga tillsammans"};
 }
 var today=new Date().toDateString(),tISO=iso(),tWD=new Date().getDay();
-function freshProg(){return {date:today,idx:-1,start:0}}
+function freshProg(){return {date:today,idx:-1,start:0,done:{}}}
 /* Äldre upplägg (morgon, dagslista, kväll) görs om till delar av dagen */
 function upgradeKid(k){
   if(Array.isArray(k.parts))return;
@@ -377,7 +396,10 @@ function normKid(k){
     if(!KINDS[p.kind])p.kind="home";
     if(!Array.isArray(p.steps))p.steps=[];
     if(!p.prog||p.prog.date!==today)p.prog=freshProg();
-    if(p.kind==="away")normAway(p);
+    if(p.kind==="away"){
+      normAway(p);
+      if(!p.prog.done){p.prog.done={};var ss=stepsOf(p);for(var j=0;j<Math.min(p.prog.idx,ss.length);j++)p.prog.done[ss[j].id]=true}
+    }
   });
   return k;
 }
@@ -426,8 +448,14 @@ function plan(p){
 }
 function stepsOf(p){return p.kind==="away"?plan(p).steps:p.steps}
 function offToday(p){return p.kind==="away"&&plan(p).off}
-function partDone(p){var s=stepsOf(p);return !s.length||p.prog.idx>=s.length}
-function partCount(p){return p.prog.idx<0?0:Math.min(p.prog.idx,stepsOf(p).length)}
+/* Förskola och eftis bockas av aktivitet för aktivitet, i valfri ordning. Hemmarutinerna går steg för steg. */
+function isDone(p,s){return !!(p.prog.done&&p.prog.done[s.id])}
+function partCount(p){
+  var ss=stepsOf(p);
+  if(p.kind==="away")return ss.filter(function(x){return isDone(p,x)}).length;
+  return p.prog.idx<0?0:Math.min(p.prog.idx,ss.length);
+}
+function partDone(p){var n=stepsOf(p).length;return !n||partCount(p)>=n}
 function setPart(i){part=cfg.parts[i];steps=part.steps;prog=part.prog;bodyCls(part.kind==="night")}
 var n=function(){return steps.length};
 var doneCount=function(){return prog.idx<0?0:Math.min(prog.idx,n())};
@@ -484,7 +512,7 @@ function items(){
   return out;
 }
 function itemDone(x){return x.pickup?picked():partDone(x.p)}
-function itemStarted(x){return x.pickup?picked():x.p.prog.idx>=0&&stepsOf(x.p).length>0}
+function itemStarted(x){return x.pickup?picked():x.p.kind==="away"?partCount(x.p)>0:x.p.prog.idx>=0&&stepsOf(x.p).length>0}
 /* Figuren står vid det som pågår. Tidigare delar behöver inte vara avbockade. */
 function curItem(it){
   it=it||items();
@@ -495,23 +523,15 @@ function curItem(it){
   return null;
 }
 
-/* ---------- Skoldagen: Nu och Sedan ---------- */
+/* ---------- Skoldagen: ett bildschema som bockas av tillsammans ---------- */
 function school(){
   var ps=cfg.parts.filter(function(p){return p.kind==="away"}),on=ps.filter(function(p){return !offToday(p)}),acts=[];
   on.forEach(function(p){stepsOf(p).forEach(function(s,i){acts.push({p:p,i:i,s:s})})});
-  var started=on.some(function(p){return p.prog.idx>=0}),cur=-1;
-  for(var k=0;k<acts.length;k++){var a=acts[k];if(a.p.prog.idx<stepsOf(a.p).length&&a.i>=Math.max(a.p.prog.idx,0)){cur=k;break}}
-  return {all:ps,on:on,off:ps.filter(offToday),acts:acts,started:started,cur:cur,done:acts.length>0&&cur<0};
-}
-/* Välj en aktivitet direkt. Det som ligger före räknas som passerat, utan att någon behöver bocka av det. */
-function goTo(sc,k){
-  sc.on.forEach(function(p){p.prog.idx=-1});
-  if(k>=sc.acts.length){sc.on.forEach(function(p){p.prog.idx=stepsOf(p).length})}
-  else{
-    var a=sc.acts[k],hit=false;
-    sc.on.forEach(function(p){if(p===a.p){hit=true;p.prog.idx=a.i;p.prog.start=Date.now()}else if(!hit)p.prog.idx=stepsOf(p).length});
-  }
-  save();
+  var order=acts.map(function(a){return {a:a,done:isDone(a.p,a.s)}});
+  if(on.length)order.push({pickup:true,done:picked()});
+  var next=-1;
+  for(var k=0;k<order.length;k++)if(!order[k].done){next=k;break}
+  return {all:ps,on:on,off:ps.filter(offToday),acts:acts,order:order,next:next,count:acts.filter(function(a){return isDone(a.p,a.s)}).length};
 }
 /* Fingeravtryck av det barnet får se i dag. Ändras något efter kontrollen stämmer det inte längre. */
 function planSig(sc){
@@ -555,8 +575,19 @@ function contactHTML(p){
   if(!c||!c.name)return "";
   return '<div class="adultrow">'+photoHTML(c.photo,"🙂")+'<span>Din vuxen här: <b>'+esc(c.name)+'</b></span></div>';
 }
-function actRow(a,cls){
-  return '<span class="ic">'+esc(a.s.icon)+'</span><span class="tx"><b>'+esc(a.s.name)+'</b>'+(a.s.time?'<small>Klockan '+esc(a.s.time)+'</small>':'')+'</span>';
+function rowHTML2(o,k,isNext){
+  var cls=o.done?"done":isNext?"next":"",ic,b,sm="",lab;
+  if(o.pickup){
+    var p=pk(),who=p&&p.set?person(p.who):null,nm=who&&who.name?esc(who.name):"";
+    ic=photoHTML(who&&who.photo,"🤗");
+    b=o.done?(nm?nm+" har hämtat dig":"Du är hämtad"):(nm?nm+" hämtar dig":"Hämtning");
+    sm=nm?esc([p.after,p.time?"klockan "+p.time:""].filter(Boolean).join(", ")):"En vuxen fyller i vem som hämtar.";
+    lab="Hämtning";cls+=" pickup";
+  }else{
+    ic='<span class="ic">'+esc(o.a.s.icon)+'</span>';b=esc(o.a.s.name);sm=o.a.s.time?"Klockan "+esc(o.a.s.time):"";lab=o.a.s.name;
+  }
+  return '<label class="chk-row '+cls+'"><input type="checkbox" class="bigbox" data-k="'+k+'" '+(o.done?"checked":"")+' aria-label="'+esc(lab)+(o.done?", gjort":"")+'">'+
+    ic+'<span class="tx"><b>'+b+'</b>'+(sm?'<small>'+sm+'</small>':'')+'</span>'+(isNext?'<small class="tag">Nästa</small>':'')+'</label>';
 }
 function renderSchool(){
   clearInterval(tick);bodyCls(false,"school");
@@ -568,64 +599,37 @@ function renderSchool(){
   }else if(!sc.on.length){
     h+='<div class="nowcard"><small class="lbl">I dag</small><div class="pic">🏠</div><h2>Ingen '+esc(sc.all[0].name.toLowerCase())+' i dag</h2></div>';
   }else{
-    var total=sc.acts.length,pos=sc.done?total:(sc.started?sc.cur:0),cur=sc.acts[sc.cur],nx=sc.cur>=0?sc.acts[sc.cur+1]:null;
-    h+='<div class="mini" role="img" aria-label="'+pos+' av '+total+' aktiviteter har passerat"><div class="bar"></div>'+
-       '<span class="mpal" style="left:'+(total?pos/total*100:0)+'%"><span>'+esc(T().pal)+'</span></span><span class="mgoal">🤗</span></div>';
-    if(sc.done){
-      h+='<div class="nowcard"><small class="lbl">Nu</small><div class="pic">'+esc(sc.on[sc.on.length-1].icon)+'</div><h2>'+esc(sc.on[sc.on.length-1].name)+' är slut för i dag</h2></div>';
-      h+='<button class="sm tall" id="choose">Välj aktivitet eller börja om</button>';
-    }else if(!total){
-      h+='<div class="bubble">Dagens plan är tom. En vuxen kan lägga in aktiviteterna under kugghjulet.</div>';
-    }else{
-      h+='<div class="nowcard"><small class="lbl">'+(sc.started?"Nu":"Först")+' · '+esc(cur.p.name)+'</small><div class="pic">'+esc(cur.s.icon)+'</div><h2>'+esc(cur.s.name)+'</h2>'+
-         (cur.s.time?'<p class="when">Klockan '+esc(cur.s.time)+'</p>':'')+contactHTML(cur.p)+'</div>'+
-         '<div class="btns two"><button class="big" id="next">'+(sc.started?"Färdigt":"Vi börjar")+'</button><button class="sm tall" id="choose">Välj aktivitet</button></div>';
-      h+='<div class="nextcard"><small class="lbl">Sedan'+(nx&&nx.p!==cur.p?" · "+esc(nx.p.name):"")+'</small>'+
-         (nx?actRow(nx):'<span class="ic">🤗</span><span class="tx"><b>Hämtning</b></span>')+'</div>';
-    }
-    /* Eftis ska synas när det ingår i dagen, och när det inte gör det */
-    var later=sc.on.filter(function(p){return cur&&sc.on.indexOf(p)>sc.on.indexOf(cur.p)});
-    later.forEach(function(p){h+='<button class="chipline" data-prep="'+cfg.parts.indexOf(p)+'"><span>'+esc(p.icon)+'</span> Senare i dag: '+esc(p.name)+' <b>Titta</b></button>'});
-    sc.off.forEach(function(p){h+='<div class="chipline plain"><span>'+esc(p.icon)+'</span> Ingen '+esc(p.name.toLowerCase())+' i dag</div>'});
-    h+=pickupHTML(sc.done,true);
+    var total=sc.acts.length,lastP=null;
+    h+='<div class="mini" role="img" aria-label="'+sc.count+' av '+total+' aktiviteter är avbockade"><div class="bar"></div>'+
+       '<span class="mpal" style="left:'+(total?sc.count/total*100:0)+'%"><span>'+esc(T().pal)+'</span></span><span class="mgoal">🤗</span></div><div class="sched">';
+    sc.order.forEach(function(o,k){
+      if(o.pickup){
+        sc.off.forEach(function(p){h+='<div class="chipline plain"><span>'+esc(p.icon)+'</span> Ingen '+esc(p.name.toLowerCase())+' i dag</div>'});
+      }else if(o.a.p!==lastP){
+        lastP=o.a.p;
+        h+='<div class="phead"><b>'+esc(lastP.icon)+' '+esc(lastP.name)+'</b>'+contactHTML(lastP)+'</div>';
+      }
+      h+=rowHTML2(o,k,k===sc.next);
+    });
+    h+='</div>';
   }
   view.innerHTML=h;
-  var nb=$("next"),cb=$("choose");
-  if(nb)nb.onclick=function(){goTo(sc,sc.started?sc.cur+1:0);renderSchool()};
-  if(cb)cb.onclick=function(){chooseOv(sc)};
-  Array.prototype.forEach.call(view.querySelectorAll("[data-prep]"),function(b){b.onclick=function(){prepOv(cfg.parts[+b.dataset.prep])}});
-  bindPickup(renderSchool);
+  Array.prototype.forEach.call(view.querySelectorAll(".bigbox"),function(box){
+    box.onchange=function(){
+      var o=sc.order[+box.dataset.k];
+      if(o.pickup)setPicked(box.checked);
+      else{var d=o.a.p.prog.done||(o.a.p.prog.done={});if(box.checked)d[o.a.s.id]=true;else delete d[o.a.s.id];save()}
+      renderSchool();
+    };
+  });
 }
 function openOv(html){ov.innerHTML='<div class="ovin">'+html+'</div>';ov.hidden=false;ov.scrollTop=0}
 function closeOv(){ov.hidden=true;ov.innerHTML=""}
-function chooseOv(sc){
-  var h='<h2>Vad gör vi nu?</h2><p class="hint">Tryck på det som händer nu. Det som ligger före räknas som passerat.</p>',lastP=null;
-  sc.acts.forEach(function(a,k){
-    if(a.p!==lastP){h+='<h3>'+esc(a.p.icon)+' '+esc(a.p.name)+'</h3>';lastP=a.p}
-    h+='<button class="pickrow '+(k===sc.cur&&sc.started?"cur":"")+'" data-k="'+k+'">'+actRow(a)+(k===sc.cur&&sc.started?'<small class="tag">Nu</small>':k<sc.cur||sc.done?'<small class="tag">Passerat</small>':'')+'</button>';
-  });
-  h+='<button class="pickrow" data-k="'+sc.acts.length+'"><span class="ic">🏁</span><span class="tx"><b>Allt är slut för i dag</b></span></button>'+
-     '<button class="pickrow" data-k="-1"><span class="ic">↩</span><span class="tx"><b>Börja om från början</b></span></button>'+
-     '<button class="sm" id="ovx">Stäng</button>';
-  openOv(h);
-  ov.onclick=function(e){
-    var b=e.target.closest("[data-k]");
-    if(b){var k=+b.dataset.k;if(k<0){sc.on.forEach(function(p){p.prog.idx=-1});save()}else goTo(sc,k);closeOv();renderSchool()}
-    else if(e.target.id==="ovx")closeOv();
-  };
-}
-function prepOv(p){
-  var h='<h2>'+esc(p.icon)+' '+esc(p.name)+' i dag</h2><p class="hint">Titta tillsammans med en vuxen.</p>';
-  stepsOf(p).forEach(function(s){h+='<div class="pickrow plain"><span class="ic">'+esc(s.icon)+'</span><span class="tx"><b>'+esc(s.name)+'</b>'+(s.time?'<small>Klockan '+esc(s.time)+'</small>':'')+'</span></div>'});
-  h+=contactHTML(p)+pickupHTML(false,true).replace(/<button[^>]*data-pick[^>]*>.*?<\/button>/,"")+'<button class="sm" id="ovx">Stäng</button>';
-  openOv(h);
-  ov.onclick=function(e){if(e.target.id==="ovx")closeOv()};
-}
 
 /* ---------- Hjälpkort: visas för en vuxen, skickar ingenting ---------- */
 function renderHelp(){
   clearInterval(tick);bodyCls(false,"school");
-  var sc=school(),cp=sc.cur>=0?sc.acts[sc.cur].p:sc.on[0];
+  var sc=school(),nx=sc.next>=0?sc.order[sc.next]:null,cp=nx&&!nx.pickup?nx.a.p:sc.on[sc.on.length-1];
   view.innerHTML='<h1 class="ptitle">Jag behöver hjälp</h1><p class="hint center">Peka på ett kort. Du behöver inte säga något.</p>'+
     '<div class="helpgrid">'+HELP.map(function(c,i){return '<button class="helpcard" data-h="'+i+'"><span class="pic">'+c[0]+'</span><b>'+c[1]+'</b></button>'}).join("")+'</div>'+
     (cp?contactHTML(cp):"")+
@@ -681,8 +685,14 @@ function exportFam(){
     c.parts.forEach(function(p){delete p.prog;delete p.id;delete p.backupOn});
     return c})});
 }
+function carry(p,q){
+  if(!q||!q.prog)return;
+  var d={};
+  stepsOf(q).forEach(function(s){if(isDone(q,s)){var m=stepsOf(p).filter(function(x){return x.name===s.name})[0];if(m)d[m.id]=true}});
+  p.prog={date:q.prog.date,idx:q.prog.idx,start:q.prog.start,done:d};
+}
 function keepProg(nk,o){
-  nk.parts.forEach(function(p){var q=o.parts.filter(function(x){return x.name===p.name&&x.kind===p.kind})[0];if(q&&q.prog)p.prog=q.prog});
+  nk.parts.forEach(function(p){carry(p,o.parts.filter(function(x){return x.name===p.name&&x.kind===p.kind})[0])});
 }
 /* Finns familjen redan (samma namn) byts upplägget ut, men stjärnor, dagens läge och dagens hämtning ligger kvar */
 function addFam(nf){
@@ -727,7 +737,7 @@ function applySchool(s,targetId){
     F.kids.push(k);
   }
   var olds=k.parts.filter(function(p){return p.kind==="away"}),at=olds.length?k.parts.indexOf(olds[0]):Math.min(1,k.parts.length);
-  s.parts.forEach(function(p){var q=olds.filter(function(x){return x.name===p.name})[0];if(q&&q.prog)p.prog=q.prog});
+  s.parts.forEach(function(p){carry(p,olds.filter(function(x){return x.name===p.name})[0])});
   var rest=k.parts.filter(function(p){return p.kind!=="away"});
   var before=k.parts.slice(0,at).filter(function(p){return p.kind!=="away"}).length;
   k.parts=rest.slice(0,before).concat(s.parts,rest.slice(before));
@@ -777,7 +787,7 @@ function renderRoad(){
   else say="Nu: "+cur.p.name+".";
   var rows=it.map(function(x){
     if(x.pickup)return pickupHTML(x===cur);
-    var p=x.p,ss=stepsOf(p),dots="";if(p.kind!=="away"||p.confirmed)for(var j=0;j<ss.length;j++)dots+='<i class="'+(j<partCount(p)?"on":"")+'"></i>';
+    var p=x.p,ss=stepsOf(p),dots="";if(p.kind!=="away"||p.confirmed)for(var j=0;j<ss.length;j++)dots+='<i class="'+((p.kind==="away"?isDone(p,ss[j]):j<partCount(p))?"on":"")+'"></i>';
     var dn=partDone(p)&&ss.length>0;
     return '<a class="stop '+(x===cur?"now":dn?"done":"")+'" href="#'+(p.kind==="away"?"skola":"del-"+(x.i+1))+'"'+(x===cur?' aria-current="step"':'')+'>'+
       '<span class="pal2">'+(x===cur?'<span>'+esc(T().pal)+'</span>':dn?"✅":"")+'</span>'+
