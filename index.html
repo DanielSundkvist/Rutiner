@@ -573,6 +573,7 @@ function renderSchool(){
        '<span class="mpal" style="left:'+(total?pos/total*100:0)+'%"><span>'+esc(T().pal)+'</span></span><span class="mgoal">🤗</span></div>';
     if(sc.done){
       h+='<div class="nowcard"><small class="lbl">Nu</small><div class="pic">'+esc(sc.on[sc.on.length-1].icon)+'</div><h2>'+esc(sc.on[sc.on.length-1].name)+' är slut för i dag</h2></div>';
+      h+='<button class="sm tall" id="choose">Välj aktivitet eller börja om</button>';
     }else if(!total){
       h+='<div class="bubble">Dagens plan är tom. En vuxen kan lägga in aktiviteterna under kugghjulet.</div>';
     }else{
