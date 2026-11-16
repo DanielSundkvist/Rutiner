@@ -139,6 +139,13 @@ label.chk input{width:24px;height:24px}
 .dots{display:flex;gap:5px;flex-wrap:wrap}
 .dots i{width:11px;height:11px;border-radius:50%;background:var(--line)}
 .dots i.on{background:var(--sun)}
+.part.hug.now{border-width:4px;border-color:var(--accent)}
+.part.hug.done{opacity:.65}
+.part.hug .hugtx{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.part.hug .hugtx p{margin:0}
+.part.hug .flip{display:inline-block;transform:scaleX(-1)}
+.big.hugbtn{font-size:22px;min-height:54px;padding:8px 14px;margin-top:4px}
+.btns.undo{justify-content:center}
 .ptitle{font-size:24px;text-align:center}
 .night .part.hug{background:#4A4222}
 .night .part.hug p{color:var(--ink)}
@@ -216,6 +223,14 @@ function defKid(theme){
 }
 var today=new Date().toDateString();
 function freshProg(){return {date:today,idx:-1,start:0}}
+function rollover(){
+  var d=new Date().toDateString();
+  if(d===today)return false;
+  today=d;
+  st.fams.forEach(function(f){f.kids.forEach(function(k){k.picked=null;k.parts.forEach(function(p){p.prog=freshProg()})})});
+  store.set("em.v3",st);
+  return true;
+}
 /* Äldre upplägg (morgon, dagslista, kväll) görs om till delar av dagen */
 function upgradeKid(k){
   if(Array.isArray(k.parts))return;
@@ -276,7 +291,23 @@ pickFam(st.fam);
 function setPart(i){part=cfg.parts[i];steps=part.steps;prog=part.prog;bodyCls(part.kind==="night")}
 function partDone(p){return !p.steps.length||p.prog.idx>=p.steps.length}
 function partCount(p){return p.prog.idx<0?0:Math.min(p.prog.idx,p.steps.length)}
-function curIdx(){for(var i=0;i<cfg.parts.length;i++)if(!partDone(cfg.parts[i]))return i;return -1}
+function picked(){return cfg.picked===today}
+/* Dagens stopp i ordning: delarna, med hämtningen efter den sista delen som är borta */
+function items(){
+  var ps=cfg.parts,out=[];
+  ps.forEach(function(p,i){
+    if(i>0&&p.kind!=="away"&&ps[i-1].kind==="away")out.push({pickup:true});
+    out.push({i:i,p:p});
+  });
+  if(ps.length&&ps[ps.length-1].kind==="away")out.push({pickup:true});
+  return out;
+}
+function curItem(it){
+  it=it||items();
+  for(var k=0;k<it.length;k++)if(it[k].pickup?!picked():!partDone(it[k].p))return it[k];
+  return null;
+}
+function curIdx(){var c=curItem();return c&&!c.pickup?c.i:-1}
 var n=function(){return steps.length};
 var doneCount=function(){return prog.idx<0?0:Math.min(prog.idx,n())};
 var finished=function(){return n()>0&&prog.idx>=n()};
@@ -302,7 +333,7 @@ function cleanFam(o){
 }
 function exportFam(){
   return JSON.stringify({name:F.name,kids:F.kids.map(function(k){
-    var c=JSON.parse(JSON.stringify(k));delete c.id;
+    var c=JSON.parse(JSON.stringify(k));delete c.id;delete c.picked;
     c.parts.forEach(function(p){delete p.prog;delete p.id;p.steps.forEach(function(s){delete s.id})});
     return c})});
 }
@@ -320,7 +351,7 @@ function addFam(nf){
   if(ex){
     nf.kids.forEach(function(k,i){
       var o=ex.kids.filter(function(x){return x.name===k.name&&x.theme===k.theme})[0]||ex.kids[i];
-      if(o){k.total=o.total;k.parts.forEach(function(p,j){var q=o.parts[j];if(q&&q.prog)p.prog=q.prog})}
+      if(o){k.total=o.total;k.picked=o.picked;k.parts.forEach(function(p,j){var q=o.parts[j];if(q&&q.prog)p.prog=q.prog})}
     });
     nf.id=ex.id;st.fams[st.fams.indexOf(ex)]=nf;
   }else st.fams.push(nf);
@@ -352,33 +383,38 @@ document.getElementById("who").addEventListener("click",function(e){
 });
 
 /* ---------- Dagens väg: delmålen från morgon till natt ---------- */
-function pickupHTML(){
-  return '<div class="part hug"><div class="ic">🤗</div><div><h3>'+esc(cfg.pickup||"Vi")+' hämtar dig</h3>'+
-    (cfg.pickupTime?'<p>'+esc(cfg.pickupTime)+'</p>':'')+(cfg.treat?'<p>Sedan: '+esc(cfg.treat)+'</p>':'')+'</div></div>';
+function pickupHTML(now){
+  var who=esc(cfg.pickup||"Vi"),dn=picked();
+  return '<div class="part hug '+(dn?"done":now?"now":"")+'"><div class="ic">'+(dn?"✅":now?'<span class="flip">'+esc(T().pal)+'</span>':"🤗")+'</div><div class="hugtx">'+
+    '<h3>'+(dn?who+' har hämtat dig':who+' hämtar dig')+'</h3>'+
+    (cfg.pickupTime&&!dn?'<p>'+esc(cfg.pickupTime)+'</p>':'')+(cfg.treat?'<p>Sedan: '+esc(cfg.treat)+'</p>':'')+
+    (dn?'<button class="sm" id="unpick">↩ Ångra</button>':'<button class="big hugbtn" id="picked">Nu är jag hämtad! 🤗</button>')+'</div></div>';
 }
 function renderRoad(){
   clearInterval(tick);
-  var ps=cfg.parts,ci=curIdx(),last=ps[ps.length-1];
-  bodyCls(ci>=0?ps[ci].kind==="night":!!(last&&last.kind==="night"));
+  var ps=cfg.parts,it=items(),cur=curItem(it),last=ps[ps.length-1];
+  bodyCls(cur?(!cur.pickup&&cur.p.kind==="night"):!!(last&&last.kind==="night"));
   var say;
   if(!ps.length)say="Det finns inga delar av dagen än. En vuxen kan lägga till dem under kugghjulet.";
-  else if(ci<0)say="Hela dagen är klar. Sov gott!";
-  else if(ci===0&&ps[0].prog.idx<0)say="Det här är din dag. Vi tar en sak i taget.";
-  else say="Nästa stopp: "+ps[ci].name+".";
-  var rows=[];
-  ps.forEach(function(p,i){
-    if(i>0&&p.kind!=="away"&&ps[i-1].kind==="away")rows.push(pickupHTML());
-    var dots="";for(var j=0;j<p.steps.length;j++)dots+='<i class="'+(j<partCount(p)?"on":"")+'"></i>';
+  else if(!cur)say="Hela dagen är klar. Sov gott!";
+  else if(cur.pickup)say="Snart blir du hämtad.";
+  else if(cur.i===0&&ps[0].prog.idx<0)say="Det här är din dag. Vi tar en sak i taget.";
+  else say="Nästa stopp: "+cur.p.name+".";
+  var rows=it.map(function(x){
+    if(x.pickup)return pickupHTML(x===cur);
+    var p=x.p,dots="";for(var j=0;j<p.steps.length;j++)dots+='<i class="'+(j<partCount(p)?"on":"")+'"></i>';
     var dn=partDone(p)&&p.steps.length>0;
-    rows.push('<a class="stop '+(i===ci?"now":dn?"done":"")+'" href="#del-'+(i+1)+'"'+(i===ci?' aria-current="step"':'')+'>'+
-      '<span class="pal2">'+(i===ci?'<span>'+esc(T().pal)+'</span>':dn?"✅":"")+'</span>'+
+    return '<a class="stop '+(x===cur?"now":dn?"done":"")+'" href="#del-'+(x.i+1)+'"'+(x===cur?' aria-current="step"':'')+'>'+
+      '<span class="pal2">'+(x===cur?'<span>'+esc(T().pal)+'</span>':dn?"✅":"")+'</span>'+
       '<span class="ic">'+esc(p.icon)+'</span>'+
-      '<span class="tx"><b>'+esc(p.name)+'</b><span class="dots">'+dots+'</span></span></a>');
+      '<span class="tx"><b>'+esc(p.name)+'</b><span class="dots">'+dots+'</span></span></a>';
   });
-  if(last&&last.kind==="away")rows.push(pickupHTML());
   view.innerHTML='<h1 style="font-size:32px;text-align:center">'+(cfg.name?esc(cfg.name)+"s dag":"Min dag")+'</h1>'+
     '<div class="bubble">'+esc(T().pal)+' '+esc(say)+'</div>'+
     '<div class="day">'+rows.join('<div class="arrow" aria-hidden="true">▼</div>')+'</div>';
+  var pk=document.getElementById("picked"),up=document.getElementById("unpick");
+  if(pk)pk.onclick=function(){cfg.picked=today;save();party(8);renderRoad()};
+  if(up)up.onclick=function(){cfg.picked=null;save();renderRoad()};
 }
 
 /* ---------- En del av dagen, ett steg i taget ---------- */
@@ -420,6 +456,7 @@ function helloText(pi){
 function renderPart(pi){
   clearInterval(tick);setPart(pi);
   var h='<h1 class="ptitle">'+esc(part.icon)+' '+esc(part.name)+'</h1>'+skyHTML();
+  var undo='<div class="btns undo"><button class="sm" id="back">↩ Ett steg tillbaka</button><button class="sm" id="again">Börja om</button></div>';
   var back='<a class="big calm" style="text-align:center;text-decoration:none;display:block" href="#dagen">Vidare på dagen</a>';
   if(!n()){
     h+='<div class="bubble">Den här delen har inga steg än. En vuxen kan lägga till dem under kugghjulet.</div>'+back;
@@ -432,8 +469,7 @@ function renderPart(pi){
     h+='<div class="bubble">'+(nightEnd?"Sov gott. Vi ses i morgon.":"Bra jobbat! Nu går vi vidare.")+'</div>'+
        '<div class="step"><div style="font-size:84px;line-height:1">'+esc(T().pal)+(nightEnd?"💤":esc(part.icon))+'</div>'+
        '<h2>'+(nightEnd?"God natt!":esc(part.name)+" är klart!")+'</h2>'+
-       '<div class="time">Du har samlat '+(cfg.total||0)+' stjärnor totalt</div>'+back+
-       '<button class="sm" id="again">Börja om</button></div>';
+       '<div class="time">Du har samlat '+(cfg.total||0)+' stjärnor totalt</div>'+back+'</div>'+undo;
   }else{
     var s=steps[prog.idx], C=2*Math.PI*52;
     h+='<div class="bubble" id="say">'+(part.kind==="away"?esc(s.name)+". Berätta hur det gick!":"Nu: "+esc(s.name)+". Du klarar det!")+'</div>'+
@@ -442,11 +478,19 @@ function renderPart(pi){
        '<circle class="left" id="arc" cx="60" cy="60" r="52" stroke-dasharray="'+C+'" stroke-dashoffset="0"/></svg>'+
        '<div class="pic">'+esc(s.icon)+'</div></div>'+
        '<h2>'+esc(s.name)+'</h2><div class="time" id="time" aria-live="off"></div>'+
-       '<button class="big" id="done">Klar! ⭐</button></div>'+stripHTML();
+       '<button class="big" id="done">Klar! ⭐</button></div>'+stripHTML()+undo;
   }
   view.innerHTML=h;
   var go=document.getElementById("go"), dn=document.getElementById("done"), ag=document.getElementById("again");
-  if(ag) ag.onclick=function(){prog.idx=-1;save();renderPart(pi)};
+  var bk=document.getElementById("back");
+  if(bk) bk.onclick=function(){
+    if(prog.idx>0){prog.idx--;cfg.total=Math.max(0,(cfg.total||0)-1)}else prog.idx=-1;
+    prog.start=Date.now();save();renderPart(pi);
+  };
+  if(ag) ag.onclick=function(){
+    if(!sure(ag,"Tryck igen för att börja om"))return;
+    cfg.total=Math.max(0,(cfg.total||0)-doneCount());prog.idx=-1;save();renderPart(pi);
+  };
   if(go) go.onclick=function(){prog.idx=0;prog.start=Date.now();save();renderPart(pi)};
   if(dn){
     dn.onclick=function(){
@@ -539,7 +583,7 @@ function renderAdult(){
     '<div class="btns"><button class="sm" id="show-code">Dela med en annan telefon</button><button class="sm" id="load-code">Läs in</button></div>'+
     '<p id="codemsg" role="status"></p>'+
     '<h3>Återställ</h3>'+
-    '<div class="btns"><button class="sm" id="redo">Börja om hela dagen</button>'+
+    '<div class="btns"><button class="sm" id="redo">Börja om hela dagen för '+esc(cfg.name||"det här barnet")+'</button>'+
     '<button class="sm warn" id="zero">Nollställ stjärnorna ('+(cfg.total||0)+')</button></div></div>';
 }
 view.addEventListener("toggle",function(e){
@@ -565,26 +609,29 @@ view.addEventListener("input",function(e){
   else return;
   save();
 });
-function sure(t){if(t.dataset.sure)return true;t.dataset.sure="1";t.textContent="Tryck igen för att ta bort";return false}
+function sure(t,txt){if(t.dataset.sure)return true;t.dataset.sure="1";t.textContent=txt||"Tryck igen för att ta bort";return false}
 view.addEventListener("click",function(e){
   var t=e.target;if(!unlocked||!t.closest(".adult"))return;
   var row=t.closest(".row[data-i]"), det=t.closest("details.pt"), a=t.dataset.a;
   if(row&&a){
     var p=cfg.parts[+row.dataset.p], arr=p.steps, i=+row.dataset.i;
-    if(a==="del")arr.splice(i,1);
+    if(a==="del"){arr.splice(i,1);if(i<p.prog.idx)p.prog.idx--}
     if(a==="up"&&i>0)arr.splice(i-1,0,arr.splice(i,1)[0]);
     if(a==="down"&&i<arr.length-1)arr.splice(i+1,0,arr.splice(i,1)[0]);
-    p.prog.idx=-1;
   }else if(det&&a){
     var pi=+det.dataset.p, ps=cfg.parts;
-    if(a==="addstep"){ps[pi].steps.push({id:uid(),icon:"⭐",name:"Nytt steg",min:ps[pi].kind==="away"?0:5});ps[pi].prog.idx=-1}
+    if(a==="addstep"){ps[pi].steps.push({id:uid(),icon:"⭐",name:"Nytt steg",min:ps[pi].kind==="away"?0:5})}
     else if(a==="pup"&&pi>0){ps.splice(pi-1,0,ps.splice(pi,1)[0]);openP=pi-1}
     else if(a==="pdown"&&pi<ps.length-1){ps.splice(pi+1,0,ps.splice(pi,1)[0]);openP=pi+1}
     else if(a==="pdel"){if(!sure(t))return;ps.splice(pi,1);openP=-1}
     else return;
   }
   else if(t.id==="add-part"){cfg.parts.push({id:uid(),icon:"⭐",name:"Ny del",kind:"home",steps:[],prog:freshProg()});openP=cfg.parts.length-1}
-  else if(t.id==="redo"){cfg.parts.forEach(function(p){p.prog.idx=-1});save();location.hash="#dagen";return}
+  else if(t.id==="redo"){
+    if(!sure(t,"Tryck igen för att börja om dagen"))return;
+    cfg.parts.forEach(function(p){cfg.total=Math.max(0,(cfg.total||0)-partCount(p));p.prog=freshProg()});
+    cfg.picked=null;save();location.hash="#dagen";return;
+  }
   else if(t.id==="zero"){cfg.total=0}
   else if(t.id==="add-fam"){var nf={id:uid(),name:"Ny familj",kids:[newKid()]};nf.active=nf.kids[0].id;st.fams.push(nf);pickFam(nf.id);openP=-1}
   else if(t.id==="add-kid"){var nk=newKid();F.kids.push(nk);pick(nk.id);openP=-1}
@@ -636,6 +683,7 @@ function route(){
     try{pend=decodeShare(location.hash)}catch(err){pend=false}
     try{history.replaceState(null,"",location.pathname+location.search)}catch(err){}
   }
+  rollover();
   if(pend!==null){renderWho();renderImport();return}
   var h=location.hash.slice(1), ci=curIdx(), m=/^del-(\d+)$/.exec(h), pi=-1, tab="dagen";
   if(h==="for-vuxna")tab="for-vuxna";
@@ -650,6 +698,9 @@ function route(){
   window.scrollTo(0,0);
 }
 window.addEventListener("hashchange",route);
+/* Ligger appen öppen över midnatt börjar dagen om av sig själv */
+document.addEventListener("visibilitychange",function(){if(!document.hidden&&rollover())route()});
+setInterval(function(){if(rollover())route()},60000);
 route();
 })();
 </script>
