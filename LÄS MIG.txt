@@ -15,3 +15,20 @@ Utan nät används den version som sparades senast.
 
 Inställningarna sparas på varje telefon. Under kugghjulet (tryck 42) finns en kod
 som flyttar en familjs inställningar till en annan telefon.
+
+Så här gör personalen
+
+1. En gång: lägg in förskolans och eftis verkliga rutiner under kugghjulet
+   (tryck 42), "Dagens delar och veckomallar", och bekräfta var och en.
+   De återanvänds sedan varje dag.
+2. Varje dag: fyll i vem som hämtar och när, så som föräldrarna har meddelat.
+   Ändra dagens upplägg om något avviker.
+3. Bekräfta dagen under "Dagens kontroll". Först då visas dagsplanen på fliken Skola.
+4. Tillsammans med barnet: välj vad som händer nu och visa "Nu", "Sedan" och
+   hämtningen. Tryck "Färdigt" när en aktivitet har passerat.
+5. Ändras hämtningen eller dagens upplägg behöver det bekräftas igen innan
+   planen visas.
+
+Hjälpkorten på fliken Hjälp går alltid att öppna. De skickar inget meddelande.
+Telefonerna synkas inte. Ett uppdaterat upplägg flyttas mellan telefoner under
+kugghjulet, "Flytta skoldagens upplägg mellan telefoner".

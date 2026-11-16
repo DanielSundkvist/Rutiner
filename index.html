@@ -232,6 +232,9 @@ details.sec>summary{padding:14px 12px;font-family:var(--display);font-weight:800
 details.sec .secb{display:flex;flex-direction:column;gap:10px;padding:0 12px 14px}
 details.sec details.pt{background:var(--sky)}
 details.sec details.pt .row{background:var(--card)}
+.todo{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+.todo.num{list-style:decimal;padding-left:22px}
+.todo.num li{padding-left:2px}
 .status{margin:0;padding-left:20px}
 .row.away{grid-template-columns:52px 1fr 76px}
 textarea{resize:vertical}
@@ -364,6 +367,7 @@ function normKid(k){
     k.people=[];
     if(k.pickup){var pr={id:uid(),name:String(k.pickup),photo:""};k.people.push(pr);k.lastPick={who:pr.id,after:String(k.pickupTime||""),time:""}}
   }
+  if(typeof k.planOk==="string")delete k.planOk;
   if(k.picked===today&&!(k.pick&&k.pick.date===tISO))k.pick={date:tISO,set:false,who:"",after:"",time:"",done:true};
   delete k.picked;
   k.parts.forEach(function(p){
@@ -458,7 +462,7 @@ function pickupHTML(now,compact){
       if(p.after)lines+='<p>'+esc(p.after)+'</p>';
       if(p.time)lines+='<p>Klockan '+esc(p.time)+'</p>';
     }
-  }else{h3="Vem hämtar i dag?";lines='<p>En vuxen berättar det.</p>'}
+  }else{h3="Hämtning i dag";lines='<p>En vuxen fyller i vem som hämtar.</p>'}
   if(cfg.treat&&!compact)lines+='<p>Sedan hemma: '+esc(cfg.treat)+'</p>';
   return '<div class="part hug '+(dn?"done":now?"now":"")+(compact?" compact":"")+'">'+photoHTML(who&&who.photo,dn?"✅":"🤗","lg")+
     '<div class="hugtx"><small class="lbl">Hämtning'+(dn?" · klar":"")+'</small><h3>'+h3+'</h3>'+lines+
@@ -507,6 +511,39 @@ function goTo(sc,k){
   }
   save();
 }
+/* Fingeravtryck av det barnet får se i dag. Ändras något efter kontrollen stämmer det inte längre. */
+function planSig(sc){
+  var p=pk(),who=p&&p.set?person(p.who):null,c;
+  var t=JSON.stringify([tISO,sc.on.map(function(x){c=contactOf(x);return [x.name,x.icon,c?c.name:"",stepsOf(x).map(function(s){return [s.icon,s.name,s.time||""]})]}),
+    sc.off.map(function(x){return x.name}),who?[who.name,p.after,p.time]:null]);
+  var h=5381;for(var i=0;i<t.length;i++)h=((h<<5)+h+t.charCodeAt(i))|0;
+  return String(h);
+}
+/* Det som måste vara klart innan dagsplanen visas för barnet */
+function schoolIssues(sc){
+  var out=[],p=pk(),who=p&&p.set?person(p.who):null;
+  if(!sc.on.length)return out;
+  sc.on.forEach(function(x){if(!x.confirmed)out.push({t:"routine",p:x})});
+  if(!(who&&who.name))out.push({t:"pick"});
+  var ok=cfg.planOk&&cfg.planOk.date===tISO;
+  if(!ok)out.push({t:"day"});
+  else if(cfg.planOk.sig!==planSig(sc))out.push({t:"changed"});
+  return out;
+}
+function issueText(x){
+  if(x.t==="routine")return '<b>'+esc(x.p.name)+':</b> rutinen är inte bekräftad. Aktiviteterna är fortfarande exempel.';
+  if(x.t==="pick")return '<b>Hämtning:</b> dagens hämtare är inte angiven.';
+  if(x.t==="changed")return '<b>Ändrat efter kontrollen:</b> hämtningen eller dagens upplägg har ändrats och behöver bekräftas igen.';
+  return '<b>Dagens kontroll:</b> ingen vuxen har bekräftat dagens plan och hämtning i dag.';
+}
+function renderCheck(sc,issues){
+  view.innerHTML='<div class="adult" style="display:flex;flex-direction:column;gap:12px"><h2>För vuxna: innan dagsplanen visas</h2>'+
+    '<p>Det här behöver bli klart för '+WDL[tWD]+' '+fmtDate(tISO)+(cfg.name?" för "+esc(cfg.name):"")+'. Dagsplanen visas först när allt stämmer.</p>'+
+    '<ul class="todo">'+issues.map(function(x){return '<li class="warnbox">⚠ '+issueText(x)+'</li>'}).join("")+'</ul>'+
+    '<a class="big" style="text-align:center;text-decoration:none;display:block" href="#for-vuxna">Fyll i och bekräfta</a>'+
+    '<p>Bakom knappen frågar appen efter talet fyrtiotvå. Hjälpkorten går alltid att öppna.</p>'+
+    '<a class="sm strong" href="#hjalp">🙋 Öppna hjälpkorten</a></div>';
+}
 function contactOf(p){return p.backupOn===tISO&&p.backup&&p.backup.name?p.backup:p.contact}
 function contactHTML(p){
   var c=contactOf(p);
@@ -518,7 +555,8 @@ function actRow(a,cls){
 }
 function renderSchool(){
   clearInterval(tick);bodyCls(false,"school");
-  var sc=school(),h="";
+  var sc=school(),h="",issues=schoolIssues(sc);
+  if(issues.length){renderCheck(sc,issues);return}
   if(!sc.all.length){
     h+='<div class="bubble">Det finns ingen förskola eller eftis inlagd. En vuxen kan lägga till det under kugghjulet.</div>';
   }else if(!sc.on.length){
@@ -692,7 +730,7 @@ function applySchool(s,targetId){
     if(!pr){pr={id:uid(),name:s.pick.who.name,photo:s.pick.who.photo};k.people.push(pr)}else if(s.pick.who.photo)pr.photo=s.pick.who.photo;
     k.pick={date:tISO,set:true,who:pr.id,after:s.pick.after,time:s.pick.time,done:!!(k.pick&&k.pick.date===tISO&&k.pick.done)};
   }
-  k.planImported={at:Date.now(),made:s.made,date:s.date};k.planOk="";k.demo=false;
+  k.planImported={at:Date.now(),made:s.made,date:s.date};k.planOk=null;k.demo=false;
   pick(k.id);save();
 }
 function shareText(text,fileName,msg){
@@ -732,7 +770,7 @@ function renderRoad(){
   else say="Nu: "+cur.p.name+".";
   var rows=it.map(function(x){
     if(x.pickup)return pickupHTML(x===cur);
-    var p=x.p,ss=stepsOf(p),dots="";for(var j=0;j<ss.length;j++)dots+='<i class="'+(j<partCount(p)?"on":"")+'"></i>';
+    var p=x.p,ss=stepsOf(p),dots="";if(p.kind!=="away"||p.confirmed)for(var j=0;j<ss.length;j++)dots+='<i class="'+(j<partCount(p)?"on":"")+'"></i>';
     var dn=partDone(p)&&ss.length>0;
     return '<a class="stop '+(x===cur?"now":dn?"done":"")+'" href="#'+(p.kind==="away"?"skola":"del-"+(x.i+1))+'"'+(x===cur?' aria-current="step"':'')+'>'+
       '<span class="pal2">'+(x===cur?'<span>'+esc(T().pal)+'</span>':dn?"✅":"")+'</span>'+
@@ -855,6 +893,7 @@ function renderPrint(){
   if(!sc.on.length)h+='<p>Ingen förskola eller eftis i dag.</p>';
   sc.on.forEach(function(x){
     var c=contactOf(x);
+    if(!x.confirmed){h+='<h3>'+esc(x.icon)+' '+esc(x.name)+'</h3><p>Rutinen är inte bekräftad än, så aktiviteterna skrivs inte ut.</p>';return}
     h+='<h3>'+esc(x.icon)+' '+esc(x.name)+(c&&c.name?' <small>Vuxen: '+esc(c.name)+'</small>':'')+'</h3><ol class="plist">'+
       stepsOf(x).map(function(s){return '<li><span class="ic">'+esc(s.icon)+'</span><b>'+esc(s.name)+'</b>'+(s.time?' <small>Klockan '+esc(s.time)+'</small>':'')+'<span class="box"></span></li>'}).join("")+'</ol>';
   });
@@ -958,15 +997,28 @@ function todayHTML(){
     h+='<div class="card"><h4>'+esc(x.icon)+' '+esc(x.name)+' i dag</h4><p>'+(pl.off?'<b>Ingen '+esc(x.name.toLowerCase())+' i dag.</b>'
         :pl.src==="o"?'<b>Ändrad bara för i dag</b>, '+pl.steps.length+' aktiviteter. Grundmallen är orörd.'
         :pl.src==="d"?'Följer mallen för '+WDL[tWD]+'ar, '+pl.steps.length+' aktiviteter.':'Följer grundmallen, '+pl.steps.length+' aktiviteter.')+
-      (!x.confirmed?' ⚠ Upplägget är ett exempel och inte bekräftat.':'')+'</p><div class="btns">'+
+      (!x.confirmed?' ⚠ Rutinen är inte bekräftad. Aktiviteterna är fortfarande exempel.':'')+'</p><div class="btns">'+
+      (!x.confirmed?'<button class="sm strong" data-act="openpart" data-p="'+i+'">Öppna och bekräfta rutinen</button>':'')+
       (pl.off?'<button class="sm" data-act="ontoday" data-p="'+i+'">Ändra: '+esc(x.name.toLowerCase())+' i dag</button>'
              :'<button class="sm" data-act="offtoday" data-p="'+i+'">Ingen '+esc(x.name.toLowerCase())+' i dag</button>')+
       (!pl.off&&!(o&&o.steps)?'<button class="sm" data-act="mkover" data-p="'+i+'">Ändra aktiviteterna bara i dag</button>':'')+
       (o?'<button class="sm warn" data-act="rmover" data-p="'+i+'">Ta bort dagens ändring</button>':'')+'</div>'+
       (o&&o.steps&&!pl.off?listHTML(i+":o",o.steps,true):'')+'</div>';
   });
-  if(sc.all.length)h+='<div class="card"><h4>✅ Dagens plan kontrollerad</h4>'+(cfg.planOk===tISO?'<p class="ok">✔ En vuxen har kontrollerat dagens plan på den här telefonen i dag.</p>'
-      :'<p class="warnbox">⚠ <b>Inte kontrollerad i dag</b> på den här telefonen.</p><button class="sm strong" data-act="planok">Vi har gått igenom dagens plan och hämtning</button>')+'</div>';
+  if(sc.on.length){
+    var iss=schoolIssues(sc),blocking=iss.filter(function(x){return x.t==="routine"||x.t==="pick"}),ok=!iss.length;
+    h+='<div class="card"><h4>✅ Dagens kontroll</h4>';
+    if(ok)h+='<p class="ok">✔ Dagens plan och hämtning bekräftades '+fmt(cfg.planOk.at)+'. Ändras något behöver det bekräftas igen.</p><a class="sm strong" href="#skola">Visa dagsplanen</a>';
+    else if(blocking.length)h+='<p class="warnbox">⚠ <b>Kan inte bekräftas än.</b> Först behövs:</p><ul class="todo">'+blocking.map(function(x){return '<li>'+issueText(x)+'</li>'}).join("")+'</ul>';
+    else{
+      h+='<p class="warnbox">⚠ '+issueText(iss[0])+'</p><p>Så här ser dagen ut för barnet:</p>';
+      sc.on.forEach(function(x){h+='<p><b>'+esc(x.icon)+' '+esc(x.name)+':</b> '+stepsOf(x).map(function(q){return esc(q.name)+(q.time?" ("+esc(q.time)+")":"")}).join(", ")+'</p>'});
+      sc.off.forEach(function(x){h+='<p><b>'+esc(x.icon)+' Ingen '+esc(x.name.toLowerCase())+' i dag.</b></p>'});
+      h+='<p><b>🤗 Hämtning:</b> '+esc(who.name)+(p.after?", "+esc(p.after):"")+(p.time?", klockan "+esc(p.time):"")+'</p>'+
+         '<button class="sm strong" data-act="planok">Dagens plan och hämtning stämmer</button>';
+    }
+    h+='</div>';
+  }
   return h;
 }
 function sec(id,title,body){
@@ -988,9 +1040,16 @@ function renderAdult(){
   var ed=cfg.planEdited||0,sh=cfg.planShared||0,im=cfg.planImported;
   var h='<div class="adult" style="display:flex;flex-direction:column;gap:12px"><h2>För vuxna'+(cfg.name?": "+esc(cfg.name):"")+'</h2>'+
     (msgText?'<p class="warnbox" role="status">'+esc(msgText)+'</p>':'')+
-    '<p>Välj barn med knapparna högst upp. Ändringar sparas direkt på den här telefonen.</p>'+todayHTML();
+    '<p>Välj barn med knapparna högst upp. Ändringar sparas direkt på den här telefonen.</p>'+
+    sec("flow","Så här gör personalen",'<ol class="todo num"><li><b>En gång:</b> lägg in förskolans och eftis verkliga rutiner under ”Dagens delar och veckomallar” och bekräfta var och en. De återanvänds sedan varje dag.</li>'+
+      '<li><b>Varje dag:</b> fyll i vem som hämtar och när, så som föräldrarna har meddelat. Ändra dagens upplägg om något avviker.</li>'+
+      '<li><b>Bekräfta dagen</b> under ”Dagens kontroll”. Först då visas dagsplanen på fliken Skola.</li>'+
+      '<li><b>Tillsammans med barnet:</b> välj vad som händer nu och visa ”Nu”, ”Sedan” och hämtningen. Tryck ”Färdigt” när en aktivitet har passerat.</li>'+
+      '<li><b>Ändras något under dagen</b> behöver det bekräftas igen innan planen visas.</li></ol>'+
+      '<p>Hjälpkorten på fliken Hjälp går alltid att öppna. De skickar inget meddelande.</p>')+todayHTML();
   /* Skoldagsplanen mellan hem och personal */
-  var body='<p><b>Telefonerna synkas inte av sig själva.</b> Den här appen har ingen gemensam lagring. När något ändras behöver planen skickas igen och läsas in på den andra telefonen.</p>'+
+  var body='<p><b>Telefonerna synkas inte av sig själva.</b> Den här appen har ingen gemensam lagring. Det som ändras på en telefon syns inte på en annan.</p>'+
+    '<p>Till vardags behövs ingen överföring: personalen fyller i och bekräftar dagens hämtning och ändringar direkt på förskolans telefon. Använd överföringen bara när ett uppdaterat upplägg ska flyttas mellan telefoner.</p>'+
     '<p>Planen innehåller bara skoldagen för '+esc(cfg.name||"det valda barnet")+': aktiviteter, veckomallar, dagens ändringar, dagens hämtning, vuxenkontakter och överenskommelsen om hjälp. Hemmarutiner, syskon och stjärnor följer inte med.</p>'+
     '<ul class="status"><li>Senast ändrad här: <b>'+fmt(ed)+'</b></li><li>Senast skickad härifrån: <b>'+fmt(sh)+'</b>'+(ed>sh&&sh?' ⚠ ändringar efter det är inte överförda':'')+'</li>'+
     '<li>Senast inläst hit: <b>'+(im?fmt(im.at)+'</b>, planen gjordes '+fmt(im.made)+' och gällde '+fmtDate(im.date)+(im.date!==tISO?' ⚠ inte dagens datum':''):'aldrig</b>')+'</li></ul>'+
@@ -1004,7 +1063,7 @@ function renderAdult(){
         return '<option value="'+k.id+'" '+(k.name&&k.name===s.name?"selected":"")+'>Uppdatera '+esc(k.name||"barn utan namn")+'</option>'}).join("")+'</select></label>'+
       '<div class="btns"><button class="sm strong" data-act="applyschool">Läs in planen</button><button class="sm" data-act="cancelschool">Avbryt</button></div></div>';
   }
-  h+=sec("share","Dela skoldagen med personalen",body);
+  h+=sec("share","Flytta skoldagens upplägg mellan telefoner",body);
   h+=sec("parts","Dagens delar och veckomallar",
     '<p>Varje del är ett stopp på dagens väg. Förskola och eftis kan ha olika upplägg olika veckodagar. 0 minuter betyder ingen timer för ett hemmasteg.</p>'+
     '<div class="list">'+cfg.parts.map(function(p,i){return partHTML(p,i,cfg.parts.length)}).join("")+'</div>'+
@@ -1029,7 +1088,7 @@ function renderAdult(){
       return '<option value="'+f.id+'" '+(f.id===F.id?"selected":"")+'>'+esc(f.name||"Familj")+'</option>'}).join("")+'</select></label>'+
     '<label class="field" for="famname">Familjens namn<input type="text" id="famname" value="'+esc(F.name)+'" maxlength="40"></label>'+
     '<div class="btns"><button class="sm" data-act="addfam">+ Ny familj</button>'+(st.fams.length>1?'<button class="sm warn" data-act="delfam">Ta bort familjen</button>':'')+'</div>'+
-    '<h4>Flytta allt till en annan förälders telefon</h4><p>Det här skickar hela familjens inställningar, även hemmarutiner och alla barn. Använd det bara mellan er föräldrar, inte till personalen. Det är en kopia, inte en synkning. Mottagaren klistrar in den under ”Dela skoldagen med personalen”.</p>'+
+    '<h4>Flytta allt till en annan förälders telefon</h4><p>Det här skickar hela familjens inställningar, även hemmarutiner och alla barn. Använd det bara mellan er föräldrar, inte till personalen. Det är en kopia, inte en synkning. Mottagaren klistrar in den under ”Flytta skoldagens upplägg mellan telefoner”.</p>'+
     '<div class="btns"><button class="sm" data-act="sharefam">Skicka hela familjens inställningar</button></div>');
   view.innerHTML=h+'</div>';
   msgText="";
@@ -1111,7 +1170,7 @@ view.addEventListener("click",function(e){
     clampProgs();touch();
   }
   else if(a==="addstep"){var key=t.dataset.list,aw=cfg.parts[+key.split(":")[0]].kind==="away";listBy(key).push({id:uid(),icon:"⭐",name:aw?"Ny aktivitet":"Nytt steg",min:aw?0:5,time:""});touch()}
-  else if(a==="confirm"){p.confirmed=true;touch()}
+  else if(a==="confirm"){p.confirmed=true;touch();save();renderWho();renderAdult();window.scrollTo(0,0);return}
   else if(a==="wd"){var dd=p.days[wd]||(p.days[wd]={});dd.off=!dd.off;if(!dd.off&&!dd.steps)delete p.days[wd];clampProgs();touch()}
   else if(a==="mkday"){(p.days[wd]||(p.days[wd]={})).steps=copySteps(p.steps);clampProgs();touch()}
   else if(a==="rmday"){if(!sure(t))return;delete p.days[wd].steps;if(!p.days[wd].off)delete p.days[wd];clampProgs();touch()}
@@ -1124,7 +1183,12 @@ view.addEventListener("click",function(e){
   }
   else if(a==="mkover"){p.over[tISO]={off:false,steps:copySteps(plan(p).steps)};touch()}
   else if(a==="rmover"){if(!sure(t,"Tryck igen för att ta bort dagens ändring"))return;delete p.over[tISO];clampProgs();touch()}
-  else if(a==="planok"){cfg.planOk=tISO}
+  else if(a==="planok"){cfg.planOk={date:tISO,sig:planSig(school()),at:Date.now()}}
+  else if(a==="openpart"){
+    openSec="parts";openP=pi;save();renderAdult();
+    var el=view.querySelector('details.pt[data-p="'+pi+'"]');if(el&&el.scrollIntoView)el.scrollIntoView();
+    return;
+  }
   else if(a==="who"){d.who=t.dataset.id;d.dirty=true}
   else if(a==="addperson"){var np={id:uid(),name:"",photo:""};cfg.people.push(np);d.who=np.id;d.dirty=true}
   else if(a==="delperson"){if(!sure(t))return;cfg.people=cfg.people.filter(function(x){return x.id!==d.who});d.who="";d.dirty=true;if(cfg.pick&&!person(cfg.pick.who))cfg.pick.set=false}
