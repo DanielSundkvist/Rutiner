@@ -232,6 +232,8 @@ details.sec>summary{padding:14px 12px;font-family:var(--display);font-weight:800
 details.sec .secb{display:flex;flex-direction:column;gap:10px;padding:0 12px 14px}
 details.sec details.pt{background:var(--sky)}
 details.sec details.pt .row{background:var(--card)}
+.peekbar{display:block;text-align:center;font-weight:700;font-size:15px;color:var(--ink);background:#FFF4F6;border:2px solid #B3243F;border-radius:12px;padding:6px 10px;text-decoration:none}
+.peekbar b{text-decoration:underline}
 .todo{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
 .todo.num{list-style:decimal;padding-left:22px}
 .todo.num li{padding-left:2px}
@@ -405,7 +407,7 @@ st.fams.forEach(function(f){f.kids.forEach(normKid)});
 store.set("em.v3",st);
 
 var F,cfg,part=null,steps=[],prog=null;
-var unlocked=false,tick=null,openP=-1,openSec="",tplSel={},draft=null,pendSchool=null,msgText="";
+var peek="",unlocked=false,tick=null,openP=-1,openSec="",tplSel={},draft=null,pendSchool=null,msgText="";
 var view=$("view"),ov=$("ov");
 var save=function(){if(!store.set("em.v3",st))msgText="Det gick inte att spara. Telefonens lagring kan vara full. Ta bort något foto och försök igen."};
 function palOf(k){return k.pal||THEMES[k.theme].pal}
@@ -542,7 +544,10 @@ function renderCheck(sc,issues){
     '<ul class="todo">'+issues.map(function(x){return '<li class="warnbox">⚠ '+issueText(x)+'</li>'}).join("")+'</ul>'+
     '<a class="big" style="text-align:center;text-decoration:none;display:block" href="#for-vuxna">Fyll i och bekräfta</a>'+
     '<p>Bakom knappen frågar appen efter talet fyrtiotvå. Hjälpkorten går alltid att öppna.</p>'+
-    '<a class="sm strong" href="#hjalp">🙋 Öppna hjälpkorten</a></div>';
+    '<a class="sm strong" href="#hjalp">🙋 Öppna hjälpkorten</a>'+
+    '<button class="sm" id="peek">Visa dagsplanen ändå, obekräftad</button>'+
+    '<p>Den obekräftade planen visas med en varningsrad överst tills allt är bekräftat.</p></div>';
+  $("peek").onclick=function(){peek=cfg.id+tISO;renderSchool()};
 }
 function contactOf(p){return p.backupOn===tISO&&p.backup&&p.backup.name?p.backup:p.contact}
 function contactHTML(p){
@@ -556,7 +561,8 @@ function actRow(a,cls){
 function renderSchool(){
   clearInterval(tick);bodyCls(false,"school");
   var sc=school(),h="",issues=schoolIssues(sc);
-  if(issues.length){renderCheck(sc,issues);return}
+  if(issues.length&&peek!==cfg.id+tISO){renderCheck(sc,issues);return}
+  if(issues.length)h+='<a class="peekbar" href="#for-vuxna">⚠ Inte bekräftad. Kan innehålla exempel. <b>Bekräfta</b></a>';
   if(!sc.all.length){
     h+='<div class="bubble">Det finns ingen förskola eller eftis inlagd. En vuxen kan lägga till det under kugghjulet.</div>';
   }else if(!sc.on.length){
@@ -1009,13 +1015,14 @@ function todayHTML(){
     var iss=schoolIssues(sc),blocking=iss.filter(function(x){return x.t==="routine"||x.t==="pick"}),ok=!iss.length;
     h+='<div class="card"><h4>✅ Dagens kontroll</h4>';
     if(ok)h+='<p class="ok">✔ Dagens plan och hämtning bekräftades '+fmt(cfg.planOk.at)+'. Ändras något behöver det bekräftas igen.</p><a class="sm strong" href="#skola">Visa dagsplanen</a>';
-    else if(blocking.length)h+='<p class="warnbox">⚠ <b>Kan inte bekräftas än.</b> Först behövs:</p><ul class="todo">'+blocking.map(function(x){return '<li>'+issueText(x)+'</li>'}).join("")+'</ul>';
+    else if(blocking.length)h+='<p class="warnbox">⚠ <b>Kan inte bekräftas än.</b> Först behövs:</p><ul class="todo">'+blocking.map(function(x){return '<li>'+issueText(x)+'</li>'}).join("")+'</ul>'+
+      '<button class="sm" data-act="peek">Visa dagsplanen ändå, obekräftad</button>';
     else{
       h+='<p class="warnbox">⚠ '+issueText(iss[0])+'</p><p>Så här ser dagen ut för barnet:</p>';
       sc.on.forEach(function(x){h+='<p><b>'+esc(x.icon)+' '+esc(x.name)+':</b> '+stepsOf(x).map(function(q){return esc(q.name)+(q.time?" ("+esc(q.time)+")":"")}).join(", ")+'</p>'});
       sc.off.forEach(function(x){h+='<p><b>'+esc(x.icon)+' Ingen '+esc(x.name.toLowerCase())+' i dag.</b></p>'});
       h+='<p><b>🤗 Hämtning:</b> '+esc(who.name)+(p.after?", "+esc(p.after):"")+(p.time?", klockan "+esc(p.time):"")+'</p>'+
-         '<button class="sm strong" data-act="planok">Dagens plan och hämtning stämmer</button>';
+         '<div class="btns"><button class="sm strong" data-act="planok">Dagens plan och hämtning stämmer</button><button class="sm" data-act="peek">Visa dagsplanen ändå, obekräftad</button></div>';
     }
     h+='</div>';
   }
@@ -1184,6 +1191,7 @@ view.addEventListener("click",function(e){
   else if(a==="mkover"){p.over[tISO]={off:false,steps:copySteps(plan(p).steps)};touch()}
   else if(a==="rmover"){if(!sure(t,"Tryck igen för att ta bort dagens ändring"))return;delete p.over[tISO];clampProgs();touch()}
   else if(a==="planok"){cfg.planOk={date:tISO,sig:planSig(school()),at:Date.now()}}
+  else if(a==="peek"){peek=cfg.id+tISO;location.hash="#skola";return}
   else if(a==="openpart"){
     openSec="parts";openP=pi;save();renderAdult();
     var el=view.querySelector('details.pt[data-p="'+pi+'"]');if(el&&el.scrollIntoView)el.scrollIntoView();
