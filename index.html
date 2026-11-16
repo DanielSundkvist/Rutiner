@@ -286,6 +286,54 @@ nav a{flex:1;text-align:center;text-decoration:none;color:var(--ink);font-weight
 nav a[aria-current=page]{border-color:var(--accent);color:var(--accent)}
 nav a.grown{flex:0 0 auto;padding:10px 14px;color:var(--ink-soft);font-weight:700;font-size:15px;display:grid;place-items:center}
 #fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:9}
+/* ---------- Telefon: kompakt bildschema, 320–430 px brett ---------- */
+html{-webkit-text-size-adjust:100%}
+#app{padding:10px 14px 0}
+main{padding-bottom:calc(100px + env(safe-area-inset-bottom, 0px))}
+body.school main{padding-bottom:calc(100px + env(safe-area-inset-bottom, 0px));gap:8px}
+body.kb nav{display:none}
+body.school .who{display:none}
+.shead{display:flex;align-items:center;gap:8px;min-height:34px}
+.shead>b{font-family:var(--display);font-weight:800;font-size:18px;line-height:1.1;overflow-wrap:anywhere}
+.shead .mini{flex:1;height:30px;margin:0 24px 0 10px}
+.shead .mini .bar{height:10px;bottom:4px}
+.shead .mini .mpal{font-size:26px;bottom:0}
+.shead .mini .mgoal{font-size:22px;right:-26px;bottom:-1px}
+.sched{gap:6px}
+.phead{margin-top:2px}
+.phead>b{font-size:17px}
+.phead .adultrow{font-size:14px}
+.chk-row{position:relative;grid-template-columns:48px 34px minmax(0,1fr);gap:6px;padding:6px 10px 6px 4px;min-height:64px;border-radius:16px}
+.chk-row .ic{font-size:30px}
+.chk-row .ph{width:34px;height:34px;font-size:28px}
+.chk-row b{font-size:19px;line-height:1.15;overflow-wrap:anywhere}
+.chk-row small{font-size:14px;line-height:1.2;overflow-wrap:anywhere}
+.chk-row .tx{gap:1px}
+.chk-row.next{border-width:3px;padding:5px 9px 5px 3px}
+.chk-row .tag{position:absolute;top:-11px;right:12px;background:var(--card);font-size:13px;line-height:1.2;padding:1px 9px}
+.bigbox{width:48px;height:48px;border:0;background:none;border-radius:12px}
+.bigbox::before{content:"";box-sizing:border-box;width:30px;height:30px;border:3px solid var(--ink);border-radius:8px;background:#fff;display:grid;place-items:center;font-size:19px;line-height:1;color:var(--ink)}
+.bigbox:checked{background:none}
+.bigbox:checked::after{content:none}
+.bigbox:checked::before{content:"✔";background:#DFF5EC}
+.chipline{min-height:38px;padding:4px 10px;font-size:15px}
+.peekbar{font-size:14px;padding:4px 8px}
+nav{padding:8px 14px calc(10px + env(safe-area-inset-bottom, 0px))}
+@media (max-width:360px){
+  #app{padding:10px 12px 0}
+  nav{gap:6px;padding-left:12px;padding-right:12px}
+  nav a{font-size:14px;padding:10px 0}
+  nav a.grown{padding:10px 10px}
+  .helpcard b{font-size:17px}
+  .helpcard .pic{font-size:46px}
+  .helpcard{min-height:128px}
+  .stop{grid-template-columns:36px 46px 1fr;gap:8px;padding:8px 10px}
+  .stop b,.stop.now b{font-size:21px}
+  .who button{font-size:17px}
+}
+@media (orientation:landscape) and (max-height:480px){
+  main,body.school main{padding-bottom:calc(84px + env(safe-area-inset-bottom, 0px))}
+}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -600,8 +648,8 @@ function renderSchool(){
     h+='<div class="nowcard"><small class="lbl">I dag</small><div class="pic">🏠</div><h2>Ingen '+esc(sc.all[0].name.toLowerCase())+' i dag</h2></div>';
   }else{
     var total=sc.acts.length,lastP=null;
-    h+='<div class="mini" role="img" aria-label="'+sc.count+' av '+total+' aktiviteter är avbockade"><div class="bar"></div>'+
-       '<span class="mpal" style="left:'+(total?sc.count/total*100:0)+'%"><span>'+esc(T().pal)+'</span></span><span class="mgoal">🤗</span></div><div class="sched">';
+    h+='<div class="shead"><b>'+esc(cfg.name||"Dagen")+'</b><div class="mini" role="img" aria-label="'+sc.count+' av '+total+' aktiviteter är avbockade"><div class="bar"></div>'+
+       '<span class="mpal" style="left:'+(total?sc.count/total*100:0)+'%"><span>'+esc(T().pal)+'</span></span><span class="mgoal">🤗</span></div></div><div class="sched">';
     sc.order.forEach(function(o,k){
       if(o.pickup){
         sc.off.forEach(function(p){h+='<div class="chipline plain"><span>'+esc(p.icon)+'</span> Ingen '+esc(p.name.toLowerCase())+' i dag</div>'});
@@ -1289,6 +1337,10 @@ function route(){
   window.scrollTo(0,0);
 }
 window.addEventListener("hashchange",route);
+/* Menyn längst ner göms medan man skriver, så att den inte hamnar över fältet ovanför tangentbordet */
+function typing(e){var t=e.target;return t&&(t.tagName==="TEXTAREA"||(t.tagName==="INPUT"&&!/checkbox|radio|file|button/.test(t.type)))}
+document.addEventListener("focusin",function(e){if(typing(e))document.body.classList.add("kb")});
+document.addEventListener("focusout",function(e){if(typing(e))document.body.classList.remove("kb")});
 /* Ligger appen öppen över midnatt börjar dagen om av sig själv */
 document.addEventListener("visibilitychange",function(){if(!document.hidden&&rollover())route()});
 setInterval(function(){if(rollover())route()},60000);
