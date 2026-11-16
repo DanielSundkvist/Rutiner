@@ -272,6 +272,38 @@ function cleanFam(o){
   })};
   f.active=f.kids[0].id;return f;
 }
+function b64(t){return btoa(unescape(encodeURIComponent(t))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"")}
+function decodeShare(txt){
+  txt=String(txt).trim();
+  var m=txt.match(/#d=([A-Za-z0-9_\-]+)/);
+  if(m){txt=decodeURIComponent(escape(atob(m[1].replace(/-/g,"+").replace(/_/g,"/"))))}
+  else{var i=txt.indexOf("{");if(i>0)txt=txt.slice(i)}
+  return cleanFam(JSON.parse(txt));
+}
+/* Finns familjen redan (samma namn) byts dess upplägg ut, men barnens stjärnor och dagens läge ligger kvar */
+function addFam(nf){
+  var ex=st.fams.filter(function(x){return x.name===nf.name})[0];
+  if(ex){
+    nf.kids.forEach(function(k,i){
+      var o=ex.kids.filter(function(x){return x.name===k.name&&x.theme===k.theme})[0]||ex.kids[i];
+      if(o){k.total=o.total;k.prog=o.prog;k.progE=o.progE}
+    });
+    nf.id=ex.id;st.fams[st.fams.indexOf(ex)]=nf;
+  }else st.fams.push(nf);
+  pickFam(nf.id);save();
+}
+var pend=null;
+function renderImport(){
+  clearInterval(tick);setMode("m");
+  view.innerHTML='<div class="adult" style="display:flex;flex-direction:column;gap:14px"><h2>Delade inställningar</h2>'+
+    (pend?'<p>Läs in inställningarna för '+esc(pend.name)+' med '+pend.kids.length+' barn?</p>'+
+      '<p>Finns familjen redan på den här telefonen byts stegen ut. Barnens stjärnor ligger kvar.</p>'+
+      '<div class="btns"><button class="sm" id="imp-yes">Läs in</button><button class="sm" id="imp-no">Avbryt</button></div>'
+     :'<p>Länken gick inte att läsa. Be om en ny delning och försök igen.</p><div class="btns"><button class="sm" id="imp-no">Fortsätt</button></div>')+'</div>';
+  var y=document.getElementById("imp-yes");
+  if(y)y.onclick=function(){addFam(pend);pend=null;location.hash="#morgon";route()};
+  document.getElementById("imp-no").onclick=function(){pend=null;location.hash="#morgon";route()};
+}
 function exportFam(){
   return JSON.stringify({name:F.name,kids:F.kids.map(function(k){
     var c=JSON.parse(JSON.stringify(k));delete c.prog;delete c.progE;delete c.id;return c})});
@@ -455,9 +487,10 @@ function renderAdult(){
     '<label class="field" for="pickupTime">När? (valfritt, så som ni brukar säga det)<input type="text" id="pickupTime" value="'+esc(cfg.pickupTime)+'" placeholder="Efter mellanmålet"></label>'+
     '<label class="field" for="treat">Något att se fram emot hemma<input type="text" id="treat" value="'+esc(cfg.treat)+'"></label>'+
     '<h3>Flytta inställningar</h3>'+
-    '<p>Kopiera familjens kod och klistra in den i appen på en annan telefon, eller spara den som reservkopia.</p>'+
-    '<textarea id="code" rows="3" aria-label="Kod med familjens inställningar" placeholder="Klistra in en kod här"></textarea>'+
-    '<div class="btns"><button class="sm" id="show-code">Visa och kopiera koden</button><button class="sm" id="load-code">Läs in inklistrad kod</button></div>'+
+    '<p>Tryck på Dela för att skicka familjens inställningar till en annan telefon. Mottagaren öppnar länken, eller klistrar in hela meddelandet i rutan här och trycker på Läs in.</p>'+
+    '<p>Delningen är en kopia. Dela igen när ni har ändrat något, så byts upplägget ut på den andra telefonen.</p>'+
+    '<textarea id="code" rows="3" aria-label="Delade inställningar" placeholder="Klistra in ett delat meddelande här"></textarea>'+
+    '<div class="btns"><button class="sm" id="show-code">Dela med en annan telefon</button><button class="sm" id="load-code">Läs in</button></div>'+
     '<p id="codemsg" role="status"></p>'+
     '<h3>Återställ</h3>'+
     '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="sm" id="redo">Börja om dagens morgon</button>'+
@@ -504,16 +537,21 @@ view.addEventListener("click",function(e){
   }
   else if(t.id==="show-code"){
     var ta=document.getElementById("code"),msg=document.getElementById("codemsg");
-    ta.value=exportFam();ta.focus();ta.select();
-    msg.textContent="Koden står i rutan. Markera och kopiera den om den inte kopierades av sig själv.";
-    try{navigator.clipboard.writeText(ta.value).then(function(){msg.textContent="Koden är kopierad."},function(){})}catch(err){}
+    var code=exportFam(),own=false;
+    try{own=location.protocol!=="file:"&&window.top===window}catch(err){}
+    var text=own?"Våra inställningar i Rutiner. Öppna länken, eller kopiera hela meddelandet och klistra in det under kugghjulet i appen: "+location.origin+location.pathname+"#d="+b64(code):code;
+    ta.value=text;
+    msg.textContent="Det som ska skickas står i rutan. Markera och kopiera det om inget annat händer.";
+    if(own&&navigator.share){navigator.share({title:"Rutiner",text:text}).catch(function(){});return}
+    ta.focus();ta.select();
+    try{navigator.clipboard.writeText(text).then(function(){msg.textContent="Kopierat. Klistra in det i ett meddelande till den andra telefonen."},function(){})}catch(err){}
     return;
   }
   else if(t.id==="load-code"){
     var nf2;
-    try{nf2=cleanFam(JSON.parse(document.getElementById("code").value))}
-    catch(err){document.getElementById("codemsg").textContent="Koden gick inte att läsa. Kopiera hela koden från den andra telefonen och försök igen.";return}
-    st.fams.push(nf2);pickFam(nf2.id);
+    try{nf2=decodeShare(document.getElementById("code").value)}
+    catch(err){document.getElementById("codemsg").textContent="Det gick inte att läsa. Kopiera hela meddelandet från den andra telefonen och försök igen.";return}
+    addFam(nf2);
   }
   else return;
   save();renderWho();renderAdult();
@@ -535,6 +573,11 @@ function party(count){
 
 /* ---------- Sidor ---------- */
 function route(){
+  if(location.hash.indexOf("#d=")===0){
+    try{pend=decodeShare(location.hash)}catch(err){pend=false}
+    try{history.replaceState(null,"",location.pathname+location.search)}catch(err){}
+  }
+  if(pend!==null){renderWho();renderImport();return}
   var h=location.hash.slice(1)||(new Date().getHours()>=16?"kvall":"morgon");
   if(h!=="min-dag"&&h!=="for-vuxna"&&h!=="kvall")h="morgon";
   if(h!=="for-vuxna")unlocked=false;
